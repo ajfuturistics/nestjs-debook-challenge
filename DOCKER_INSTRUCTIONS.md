@@ -6,12 +6,23 @@ I have Dockerized the application so you can run the entire stack (App, Postgres
 
 This runs the NestJS API, PostgreSQL, and Redis in isolated containers.
 
-1.  **Start Services**:
+1.  **Start Everything (Recommended)**:
+    Use the automated scripts to start containers and run migrations:
+    ```bash
+    # Windows
+    ./start-docker.ps1
+
+    # Linux/Mac
+    bash start-docker.sh
+    ```
+
+    *Alternatively, use standard docker command:*
     ```bash
     docker compose up -d --build
     ```
 
-2.  **Run Migrations** (inside the container):
+2.  **Run Migrations** (Internal):
+    *Note: The helper scripts automate this. If running manually via docker compose:*
     ```bash
     docker compose exec app npm run migration:run
     ```

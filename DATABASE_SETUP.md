@@ -7,15 +7,19 @@
 
 ## Quick Start
 
-### 1. Start Database Services
+### 1. Start Services and Setup Database
+
+The recommended way is to use the provided helper scripts which automate container startup and migrations:
 
 ```bash
-# Start PostgreSQL and Redis containers
-docker-compose up -d
+# Windows (PowerShell)
+./start-docker.ps1
 
-# Verify containers are running
-docker ps
+# Linux / Mac / Git Bash
+bash start-docker.sh
 ```
+
+This will automatically create the database, run migrations, and start the application.
 
 ### 2. Install Dependencies
 
@@ -33,10 +37,12 @@ The `.env.example` file is already configured for local development. The databas
 npm run build
 ```
 
-### 5. Run Migrations
+### 5. Run Migrations (Manual)
+
+*Note: If you used the helper scripts in Step 1, this step is already done.*
 
 ```bash
-# Run all pending migrations (creates database schema)
+# Run all pending migrations manually
 npm run migration:run
 ```
 
