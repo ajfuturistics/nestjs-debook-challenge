@@ -80,12 +80,6 @@ Detailed API documentation and interactive testing are available via Swagger at 
 
 ## Testing
 
-**Integration Test (Recommended)**
-Runs a full scenario (Create Post -> Like -> Verify Counter -> Verify Notification):
-```bash
-node test/api-test.js
-```
-
 **Unit Tests**:
 ```bash
 npm run test
