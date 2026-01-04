@@ -30,63 +30,78 @@ export class LikesService {
     private readonly logger = new Logger(LikesService.name);
 
     async toggleLike(userId: string, postId: string): Promise<{ status: 'liked' | 'unliked' }> {
-        // Check if post exists
-        const post = await this.postsService.getPostById(postId);
-        if (!post) {
-            throw new NotFoundException(`Post with ID ${postId} not found`);
-        }
+        this.logger.log(`User: ${userId} | Post: ${postId} | Executing toggle like`);
 
-        // Check if like already exists to determine action
-        const existingLike = await this.likesRepository.findOne({
-            where: { userId, postId },
-        });
+        try {
+            // Check if post exists
+            const post = await this.postsService.getPostById(postId);
+            if (!post) {
+                // Technically getPostById throws NotFoundException, but if it returned null:
+                this.logger.log(`User: ${userId} | Post: ${postId} | Failure: Post not found`);
+                throw new NotFoundException(`Post with ID ${postId} not found`);
+            }
 
-        if (existingLike) {
-            // Case: User Liked -> Want to Unlike
-            await this.likesRepository.remove(existingLike);
-            await this.postsService.decrementLikeCount(postId);
+            this.logger.log(`User: ${userId} | Post: ${postId} | Validation passed: Post exists`);
 
-            this.logger.log(`User: ${userId} | Post: ${postId} | Unliked post`);
-
-            return { status: 'unliked' };
-        } else {
-            // Case: User Not Liked -> Want to Like
-            const like = this.likesRepository.create({
-                userId,
-                postId,
+            // Check if like already exists to determine action
+            const existingLike = await this.likesRepository.findOne({
+                where: { userId, postId },
             });
 
-            try {
-                await this.likesRepository.save(like);
+            if (existingLike) {
+                this.logger.log(`User: ${userId} | Post: ${postId} | Action: Unlike`);
+                // Case: User Liked -> Want to Unlike
+                await this.likesRepository.remove(existingLike);
+                await this.postsService.decrementLikeCount(postId);
 
-                // Atomically increment counter
-                await this.postsService.incrementLikeCount(postId);
+                this.logger.log(`User: ${userId} | Post: ${postId} | Successfully unliked post`);
 
-                // Emit event for async notification processing
-                // Don't notify if user is liking their own post
-                if (post.userId !== userId) {
-                    this.eventEmitter.emit(
-                        'post.liked',
-                        new PostLikedEvent(postId, userId, post.userId),
-                    );
-                }
+                return { status: 'unliked' };
+            } else {
+                this.logger.log(`User: ${userId} | Post: ${postId} | Action: Like`);
+                // Case: User Not Liked -> Want to Like
+                const like = this.likesRepository.create({
+                    userId,
+                    postId,
+                });
 
-                this.logger.log(`User: ${userId} | Post: ${postId} | Liked post`);
-                return { status: 'liked' };
+                try {
+                    await this.likesRepository.save(like);
 
-            } catch (error) {
-                // Handle unique constraint violation (race condition)
-                if (error.code === '23505') {
-                    // They liked it while we were processing. So now it is liked.
-                    // If we wanted strict toggle, we might need retry, but 'liked' is a safe state to return here.
+                    // Atomically increment counter
+                    await this.postsService.incrementLikeCount(postId);
+
+                    // Emit event for async notification processing
+                    // Don't notify if user is liking their own post
+                    if (post.userId !== userId) {
+                        this.eventEmitter.emit(
+                            'post.liked',
+                            new PostLikedEvent(postId, userId, post.userId),
+                        );
+                    }
+
+                    this.logger.log(`User: ${userId} | Post: ${postId} | Successfully liked post`);
                     return { status: 'liked' };
+
+                } catch (error) {
+                    // Handle unique constraint violation (race condition)
+                    if (error.code === '23505') {
+                        this.logger.log(`User: ${userId} | Post: ${postId} | Race condition: Already liked, treating as success`);
+                        // They liked it while we were processing. So now it is liked.
+                        // If we wanted strict toggle, we might need retry, but 'liked' is a safe state to return here.
+                        return { status: 'liked' };
+                    }
+                    throw error;
                 }
-                throw error;
             }
+        } catch (error) {
+            this.logger.error(`User: ${userId} | Post: ${postId} | Error executing toggle like`, error.stack);
+            throw error;
         }
     }
 
     async hasUserLikedPost(userId: string, postId: string): Promise<boolean> {
+        this.logger.log(`User: ${userId} | Post: ${postId} | Checking if user liked post`);
         const count = await this.likesRepository.count({
             where: { userId, postId },
         });

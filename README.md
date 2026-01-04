@@ -64,13 +64,7 @@ Use the following seed user IDs for testing:
 - Alice: `a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11`
 - Bob: `b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a12`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/v1/posts` | Create a new post |
-| `GET` | `/v1/posts/:id` | Get post with `likesCount` |
-| `POST` | `/v1/posts/:id/like` | Like a post |
-| `DELETE` | `/v1/posts/:id/like` | Unlike a post |
-| `GET` | `/v1/notifications` | Get user notifications |
+Detailed API documentation and interactive testing are available via Swagger at `http://localhost:3000/api`.
 
 ## Testing
 
@@ -95,3 +89,36 @@ npm run test:e2e
 - **Denormalized Counters**: Chosen to meet the "efficient queries" requirement. Avoids joining the `likes` table on every read.
 - **TypeORM**: Used for robust migration support and entity management.
 - **BullMQ**: Chosen for reliable, persistent background job processing (Notifications) that survives app restarts.
+
+## Notification Flow
+
+The notification system uses an asynchronous, event-driven architecture to decouple user actions from notification processing.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as API (LikesService)
+    participant EM as Event Emitter
+    participant L as Listener
+    participant Q as BullMQ (Redis)
+    participant W as Worker (Processor)
+    participant DB as Database
+
+    User->>API: Like Post
+    API->>DB: Save Like
+    API->>EM: Emit 'post.liked'
+    API-->>User: 200 OK (Immediate Response)
+    
+    EM->>L: Handle Event
+    L->>Q: Add Job 'post-liked'
+    
+    Q->>W: Process Job (Async)
+    W->>DB: Create Notification
+    W->>DB: Save Notification
+```
+
+1.  **User Action**: User likes a post.
+2.  **Synchronous**: Application updates database and returns success immediately.
+3.  **Event**: `post.liked` event is emitted.
+4.  **Queue**: Listener catches event and adds a job to BullMQ (Redis).
+5.  **Processing**: Worker picks up job, creates notification record in DB.

@@ -16,14 +16,22 @@ export class NotificationsService {
         type: NotificationType,
         data: Record<string, any>,
     ): Promise<Notification> {
-        const notification = this.notificationsRepository.create({
-            userId,
-            type,
-            data,
-            read: false,
-        });
+        this.logger.log(`User: ${userId} | Executing create notification`);
+        try {
+            const notification = this.notificationsRepository.create({
+                userId,
+                type,
+                data,
+                read: false,
+            });
 
-        return this.notificationsRepository.save(notification);
+            const savedNotification = await this.notificationsRepository.save(notification);
+            this.logger.log(`User: ${userId} | Successfully created notification | ID: ${savedNotification.id}`);
+            return savedNotification;
+        } catch (error) {
+            this.logger.error(`User: ${userId} | Error executing create notification`, error.stack);
+            throw error;
+        }
     }
 
     private readonly logger = new Logger(NotificationsService.name);
@@ -33,28 +41,38 @@ export class NotificationsService {
         limit: number = 50,
         offset: number = 0,
     ): Promise<[NotificationResponseDto[], number]> {
-        this.logger.debug(`Fetching notifications for User: ${userId} | Limit: ${limit}`);
-        const [notifications, total] = await this.notificationsRepository.findAndCount({
-            where: { userId },
-            order: { createdAt: 'DESC' },
-            take: limit,
-            skip: offset,
-        });
+        this.logger.log(`User: ${userId} | Executing get user notifications | Limit: ${limit} | Offset: ${offset}`);
 
-        return [notifications.map((n) => new NotificationResponseDto(n)), total];
+        try {
+            const [notifications, total] = await this.notificationsRepository.findAndCount({
+                where: { userId },
+                order: { createdAt: 'DESC' },
+                take: limit,
+                skip: offset,
+            });
+
+            this.logger.log(`User: ${userId} | Successfully retrieved ${notifications.length} notifications | Total: ${total}`);
+            return [notifications.map((n) => new NotificationResponseDto(n)), total];
+        } catch (error) {
+            this.logger.error(`User: ${userId} | Error executing get user notifications`, error.stack);
+            throw error;
+        }
     }
 
     async markAsRead(notificationId: string): Promise<void> {
+        this.logger.log(`Executing mark notification as read | ID: ${notificationId}`);
         await this.notificationsRepository.update(
             { id: notificationId },
             { read: true },
         );
-        this.logger.log(`Notification marked as read | ID: ${notificationId}`);
+        this.logger.log(`Successfully marked notification as read | ID: ${notificationId}`);
     }
 
     async getUnreadCount(userId: string): Promise<number> {
-        return this.notificationsRepository.count({
+        this.logger.log(`User: ${userId} | Executing get unread count`);
+        const count = await this.notificationsRepository.count({
             where: { userId, read: false },
         });
+        return count;
     }
 }
