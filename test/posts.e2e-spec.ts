@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, UnauthorizedException } from '@nestjs/common';
 import request from 'supertest';
 import { PostsController } from '../src/posts/controllers/posts.controller';
 import { PostsService } from '../src/posts/services/posts.service';
@@ -32,18 +32,21 @@ describe('PostsController (e2e)', () => {
                     provide: PostsService,
                     useValue: postsService,
                 },
-                {
-                    provide: UserIdGuard,
-                    useValue: {
-                        canActivate: (ctx) => {
-                            const req = ctx.switchToHttp().getRequest();
-                            req.userId = req.headers['x-user-id'];
-                            return !!req.userId;
-                        }
-                    }
-                }
             ],
-        }).compile();
+        })
+            .overrideGuard(UserIdGuard)
+            .useValue({
+                canActivate: (ctx) => {
+                    const req = ctx.switchToHttp().getRequest();
+                    const userId = req.headers['x-user-id'];
+                    if (!userId) {
+                        throw new UnauthorizedException('x-user-id header is required');
+                    }
+                    req.userId = userId;
+                    return true;
+                }
+            })
+            .compile();
 
         app = moduleFixture.createNestApplication();
         app.useGlobalPipes(new ValidationPipe());

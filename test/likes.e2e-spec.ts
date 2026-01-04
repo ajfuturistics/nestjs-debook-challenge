@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, UnauthorizedException } from '@nestjs/common';
 import request from 'supertest';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -23,18 +23,21 @@ describe('LikesController (e2e)', () => {
                     provide: LikesService,
                     useValue: likesService,
                 },
-                {
-                    provide: UserIdGuard,
-                    useValue: {
-                        canActivate: (ctx) => {
-                            const req = ctx.switchToHttp().getRequest();
-                            req.userId = req.headers['x-user-id'];
-                            return !!req.userId;
-                        }
-                    }
-                }
             ],
-        }).compile();
+        })
+            .overrideGuard(UserIdGuard)
+            .useValue({
+                canActivate: (ctx) => {
+                    const req = ctx.switchToHttp().getRequest();
+                    const userId = req.headers['x-user-id'];
+                    if (!userId) {
+                        throw new UnauthorizedException('x-user-id header is required');
+                    }
+                    req.userId = userId;
+                    return true;
+                }
+            })
+            .compile();
 
         app = moduleFixture.createNestApplication();
         app.useGlobalPipes(new ValidationPipe());
